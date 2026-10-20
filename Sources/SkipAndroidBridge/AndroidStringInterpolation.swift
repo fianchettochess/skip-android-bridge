@@ -53,8 +53,10 @@ public struct AndroidStringInterpolation : StringInterpolationProtocol, Equatabl
             appendInterpolation(value, specifier: "%lf")
         } else if T.self == Float.self {
             appendInterpolation(value, specifier: "%f")
-        } else if T.self == Int.self {
-            appendInterpolation(value, specifier: "%lld")
+        } else if let value = value as? Int, T.self == Int.self {
+            // Native Int uses a 32-bit JNI wrapper. Match the 64-bit format
+            // argument explicitly so values outside Int32 retain their width.
+            appendInterpolation(Int64(value), specifier: "%lld")
         } else if T.self == Int8.self {
             appendInterpolation(value, specifier: "%d")
         } else if T.self == Int16.self {
@@ -63,8 +65,9 @@ public struct AndroidStringInterpolation : StringInterpolationProtocol, Equatabl
             appendInterpolation(value, specifier: "%d")
         } else if T.self == Int64.self {
             appendInterpolation(value, specifier: "%lld")
-        } else if T.self == UInt.self {
-            appendInterpolation(value, specifier: "%llu")
+        } else if let value = value as? UInt, T.self == UInt.self {
+            // UInt64 bridges as kotlin.ULong instead of narrowing to UInt32.
+            appendInterpolation(UInt64(value), specifier: "%llu")
         } else if T.self == UInt8.self {
             appendInterpolation(value, specifier: "%u")
         } else if T.self == UInt16.self {
