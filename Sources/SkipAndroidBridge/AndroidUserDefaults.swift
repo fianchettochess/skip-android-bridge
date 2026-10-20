@@ -177,9 +177,14 @@ open class AndroidUserDefaults : Foundation.UserDefaults {
     }
 }
 
+// Swift 6.4 on Android already inherits Foundation's unavailable Sendable
+// conformance. Restating it warns; inheriting it still rejects Sendable use.
+// Keep the explicit unavailability for older compilers and host Robolectric.
+#if !os(Android) || compiler(<6.4)
 @available(*, unavailable)
 extension AndroidUserDefaults : @unchecked Sendable {
 }
+#endif
 
 extension AndroidUserDefaults : JObjectProtocol, JConvertible {
     public static func fromJavaObject(_ obj: JavaObjectPointer?, options: JConvertibleOptions) -> Self {
