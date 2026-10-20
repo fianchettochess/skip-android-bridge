@@ -113,7 +113,7 @@ private func bootstrapTimezone() throws {
     var t = time(nil)
     var lt : tm = tm()
     localtime_r(&t, &lt)
-    if let zoneptr = lt.tm_zone, let name = String(validatingUTF8: zoneptr) {
+    if let zoneptr = lt.tm_zone, let name = String(validatingCString: zoneptr) {
         //logger.debug("detected timezone: \(name)")
         setenv("TZ", name, 0)
     }
