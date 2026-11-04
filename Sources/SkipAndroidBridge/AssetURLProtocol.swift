@@ -14,10 +14,13 @@ public class AssetURLProtocol: URLProtocol {
     /// The URL scheme that this protocol handles
     public static let scheme = "asset"
 
+    private static let registrationLock = NSLock()
     nonisolated(unsafe) private static var registered = false
     nonisolated(unsafe) private static var assetManager: AndroidAssetManager? = nil
 
     public static func register() throws {
+        registrationLock.lock()
+        defer { registrationLock.unlock() }
         if registered { return }
 
         _ = URLProtocol.registerClass(AssetURLProtocol.self)
@@ -45,6 +48,36 @@ public class AssetURLProtocol: URLProtocol {
         Self.registered = true
     }
 
+    private static func registeredManager() -> AndroidAssetManager? {
+        registrationLock.lock()
+        defer { registrationLock.unlock() }
+        return assetManager
+    }
+
+    private static func assetPath(for url: URL) -> String {
+        String(url.path.trimmingPrefix("/"))
+    }
+
+    /// Open an asset URL resolved by the bundle as a bounded sequential stream.
+    /// The bridge must be registered before opening a stream.
+    public static func openStream(for url: URL) throws -> AssetInputStream {
+        guard url.scheme == scheme else {
+            throw AndroidAssetError(errorDescription: "not an asset URL")
+        }
+        guard let manager = registeredManager() else {
+            throw AndroidAssetError(errorDescription: "asset manager is not registered")
+        }
+        let path = assetPath(for: url)
+        guard let asset = manager.open(from: path, mode: .streaming) else {
+            throw AndroidAssetError(errorDescription: "asset could not be opened: \(path)")
+        }
+        return AssetInputStream(
+            remaining: { asset.remainingLength },
+            read: { asset.read(size: $0) },
+            close: { asset.close(); withExtendedLifetime(manager) {} }
+        )
+    }
+
     public override func startLoading() {
         guard let client else { return }
 
@@ -61,12 +94,12 @@ public class AssetURLProtocol: URLProtocol {
             client.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: code, httpVersion: "HTTP/1.1", headerFields: nil)!, cacheStoragePolicy: .notAllowed)
 
         }
-        guard let assetManager = Self.assetManager else {
+        guard let assetManager = Self.registeredManager() else {
             sendHTTP(code: 500) // "server error"
             return
         }
 
-        let assetPath = String(url.path.trimmingPrefix("/")) // Asset read paths are without preceeding slashes
+        let assetPath = Self.assetPath(for: url)
         if let data = assetManager.load(from: assetPath) {
             sendHTTP(code: 200)
             client.urlProtocol(self, didLoad: data)
